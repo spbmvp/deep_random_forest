@@ -1,4 +1,4 @@
-from DeepRandomForest.ForestsModel import ForestsModel
+from ForestsModel import ForestsModel
 
 if __name__ == '__main__':
     print("hello")

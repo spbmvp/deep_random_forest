@@ -39,7 +39,7 @@ class DeepRandomForest(object):
 
         pass
 
-    def fit_drf(self):
+    def fit_drf(self, X, y=None):
         pass
 
     def predict_drf(self):

@@ -3,6 +3,7 @@
 # В этом файле описывается модель первого сверточного слоя и каскадов
 
 from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier
+
 from DeepRandomForest import DeepRandomForest
 
 
