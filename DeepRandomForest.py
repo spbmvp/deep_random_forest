@@ -69,7 +69,7 @@ class DeepRandomForest(object):
     def mgs_predict(self, X):
         if self._widows_size != 1:
             X = self.windows_sliced(X)
-        new_X = [mgs.cross_val_predict(X, y) for mgs in self._mgs_estimators]
+        new_X = [mgs.predict_proba(X) for mgs in self._mgs_estimators]
         return new_X
 
     def cf_predict(self, X):
