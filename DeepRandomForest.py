@@ -1,5 +1,5 @@
 import numpy as np
-
+import copy
 
 class DeepRandomForest(object):
     """Задает модель лесов в каскадах, и их парраметры
@@ -59,7 +59,7 @@ class DeepRandomForest(object):
         return self.cf_predict(X)
 
     def mgs_fit(self, X, y=None):
-        print('Обучение mgs началось')
+        print('Обучение mgs началось X_shape = ', X.shape)
         if self._widows_size != 1:
             X = self.windows_sliced(X)
         y = np.hstack([y for _ in range(int(len(X) / len(y)))])
@@ -71,35 +71,37 @@ class DeepRandomForest(object):
         return new_X
 
     def cf_fit(self, X, y=None):
-        print('Обучение cf началось')
-        while self._current_level != 2:
+        print('Обучение cf началось X_shape = ', X.shape)
+        while self._current_level != 4:
             predict = []
-            estimators = self._cf_estimators.copy()
-            for estimator in estimators:
+            for estimator in self._cf_estimators:
                 estimator.fit(X, y)
                 predict.append(estimator.predict_proba(X))
             X = np.hstack([X] + predict)
-            self._cascade_levels.append(estimators)
+            self._cascade_levels.append(copy.deepcopy(self._cf_estimators))
             self._current_level += 1
-            print('Обучение уровня ', self._current_level, ' cf закончилось')
+            print('Обучение уровня ', self._current_level, ' cf закончилось X_shape = ', X.shape)
         print('Обучение cf закончилось')
 
     def mgs_predict(self, X):
+        print('Тестирование mgs началось X_shape = ', X.shape)
         if self._widows_size != 1:
             X = self.windows_sliced(X)
         new_X = np.hstack([mgs.predict_proba(X) for mgs in self._mgs_estimators])
+        print('Каскады протестированы X_shape = ', X.shape)
         if self._widows_size != 1:
             new_X = np.hstack([new_X[i:i + self._len_X] for i in range(0, len(new_X), self._len_X)])
-        print('Обучение mgs закончено X_shape = ', new_X.shape)
+        print('Тестирование mgs закончено X_shape = ', new_X.shape)
         return new_X
 
     def cf_predict(self, X):
+        predict = None
         for level in self._cascade_levels:
             predict = []
             for estimator in level:
                 predict.append(estimator.predict_proba(X))
             X = np.hstack([X] + predict)
-            return np.array(predict).mean(axis=0).argmax(axis=1)
+        return np.array(predict).mean(axis=0).argmax(axis=1)
 
     def windows_sliced(self, X: np.array):
         if self._widows_size * X.shape[1] < 1:
