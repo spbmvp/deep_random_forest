@@ -43,7 +43,7 @@ class ForestsModel(object):
                       RandomForestClassifier]
     _mgs_min_samples_split = 2
     _mgs_n_estimator = 30
-    _mgs_windows_size = 1
+    _mgs_windows_size = 0.93
     # CF
     _cascade_list_tree = [ExtraTreesClassifier,
                           RandomForestClassifier,
