@@ -6,7 +6,7 @@ if __name__ == '__main__':
     data = Mnist()
     X, y = data.getSetTemp()
     cascade_forest = ForestsModel().get_forests()
-    cascade_forest.fit(X[:40], y[:40])
+    cascade_forest.fit(X[:40], y[:40], X[40:50])
     pred = cascade_forest.predict(X[40:])
     k = 0
     for i in range(len(pred)):

@@ -1,6 +1,6 @@
 import numpy as np
 import copy
-
+from joblib import Parallel, delayed
 
 class DeepRandomForest(object):
     """Задает модель лесов в каскадах, и их парраметры
@@ -44,12 +44,16 @@ class DeepRandomForest(object):
         self._cf_estimators = [estimator['estimators_class'](**estimator['estimators_params'])
                                for estimator in cf_model]
 
-    def fit(self, X, X_tar, y=None):
-        if y is not None:
-            self._classes = np.unique(y)
-            mean = self.get_mean_classes(X, y)
-            mean = X_tar
+    def fit(self, X, y, X_tar):
+        self._classes = np.unique(y)
         self._len_X = len(X)
+        y_tar = []
+        mean = self.get_mean_classes(X, y)
+        for number in X_tar:
+            y_tar.append([np.linalg.norm(number - classes_mean) for classes_mean in mean])
+        y_tar = np.argmin(y_tar, axis=1)
+        y = np.hstack([y, y_tar])
+        X = np.vstack([X, X_tar])
         if self._mgs_estimators is not None:
             X = self.mgs_fit(X, y)
         else:
