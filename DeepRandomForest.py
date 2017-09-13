@@ -1,6 +1,7 @@
 import numpy as np
 import copy
 
+
 class DeepRandomForest(object):
     """Задает модель лесов в каскадах, и их парраметры
     Attributes
@@ -30,6 +31,7 @@ class DeepRandomForest(object):
     _cascade_levels = []
     _current_level = 0
     _widows_size = 1
+    _classes = 0
 
     def __init__(self, cf_model, mgs_model, **kwargs):
         # инициализация слоя mgs
@@ -42,7 +44,11 @@ class DeepRandomForest(object):
         self._cf_estimators = [estimator['estimators_class'](**estimator['estimators_params'])
                                for estimator in cf_model]
 
-    def fit(self, X, y=None):
+    def fit(self, X, X_tar, y=None):
+        if y is not None:
+            self._classes = np.unique(y)
+            mean = self.get_mean_classes(X, y)
+            mean = X_tar
         self._len_X = len(X)
         if self._mgs_estimators is not None:
             X = self.mgs_fit(X, y)
@@ -72,7 +78,7 @@ class DeepRandomForest(object):
 
     def cf_fit(self, X, y=None):
         print('Обучение cf началось X_shape = ', X.shape)
-        while self._current_level != 4:
+        while self._current_level != 2:
             predict = []
             for estimator in self._cf_estimators:
                 estimator.fit(X, y)
@@ -118,3 +124,6 @@ class DeepRandomForest(object):
                                for i in range(X.shape[1] - windows_size + 1)
                                for j in range(X.shape[2] - windows_size + 1)])
             return new_X.reshape(new_X.shape[0], new_X.shape[1] * new_X.shape[2])
+
+    def get_mean_classes(self, X: np.array, y: np.array):
+        return np.vstack([np.mean(X[np.argwhere(y == i)], axis=0) for i in self._classes])

@@ -1,6 +1,5 @@
 from random import randint
 from numpy import array, zeros
-from scipy.misc import imresize
 
 
 class Mnist:
