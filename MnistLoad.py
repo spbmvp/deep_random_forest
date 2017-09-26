@@ -13,7 +13,7 @@ class Mnist:
         fileImage.read(16)
         fileLabel = open('./TrainData/train-labels.idx1-ubyte', 'rb')
         fileLabel.read(8)
-        for _ in range(50000):
+        for _ in range(2000):
             image = zeros((28, 28), dtype=float)
             for i in range(28):
                 for j in range(28):

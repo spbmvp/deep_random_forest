@@ -1,6 +1,8 @@
 import numpy as np
 import copy
 from joblib import Parallel, delayed
+from quadprog import solve_qp
+
 
 class DeepRandomForest(object):
     """Задает модель лесов в каскадах, и их парраметры
@@ -32,6 +34,7 @@ class DeepRandomForest(object):
     _current_level = 0
     _widows_size = 1
     _classes = 0
+    _n_estimator = 0
 
     def __init__(self, cf_model, mgs_model, **kwargs):
         # инициализация слоя mgs
@@ -43,32 +46,26 @@ class DeepRandomForest(object):
         # инициализация каскадов
         self._cf_estimators = [estimator['estimators_class'](**estimator['estimators_params'])
                                for estimator in cf_model]
+        self._n_estimator = [len(estimator.estimators_) for estimator in self._cf_estimators]
 
-    def fit(self, X, y, X_tar):
+    def stream(self, X, y, z):
         self._classes = np.unique(y)
         self._len_X = len(X)
         y_tar = []
         mean = self.get_mean_classes(X, y)
-        for number in X_tar:
+        for number in z:
             y_tar.append([np.linalg.norm(number - classes_mean) for classes_mean in mean])
         y_tar = np.argmin(y_tar, axis=1)
         y = np.hstack([y, y_tar])
-        X = np.vstack([X, X_tar])
+        X = np.vstack([X, z])
         if self._mgs_estimators is not None:
             X = self.mgs_fit(X, y)
         else:
             X = np.array([X_i.ravel() for X_i in X])
-        self.cf_fit(X, y)
+            z = np.array([z_i.ravel() for z_i in z])
+        return self.cf_stream(X, y, z)
 
-    def predict(self, X):
-        self._len_X = len(X)
-        if self._mgs_estimators is not None:
-            X = self.mgs_predict(X)
-        else:
-            X = np.array([X_i.ravel() for X_i in X])
-        return self.cf_predict(X)
-
-    def mgs_fit(self, X, y=None):
+    def mgs_fit(self, X, y):
         print('Обучение mgs началось X_shape = ', X.shape)
         if self._widows_size != 1:
             X = self.windows_sliced(X)
@@ -80,38 +77,50 @@ class DeepRandomForest(object):
         print('Обучение mgs закончено X_shape = ', new_X.shape)
         return new_X
 
-    def cf_fit(self, X, y=None):
-        print('Обучение cf началось X_shape = ', X.shape)
-        while self._current_level != 2:
-            predict = []
+    def cf_stream(self, X, y, z):
+        lamda = 0.00000000001
+        untagget_y = None
+        print('Поток DADF стартовал X_shape = ', X.shape)
+        while self._current_level != 4:
+            predict_X = []
+            predict_z = []
             for estimator in self._cf_estimators:
                 estimator.fit(X, y)
-                predict.append(estimator.predict_proba(X))
-            X = np.hstack([X] + predict)
-            self._cascade_levels.append(copy.deepcopy(self._cf_estimators))
+                predict_A = Parallel(n_jobs=-1)(
+                    delayed(self.tree_predict)(forest, X) for forest in estimator.estimators_)
+                # [forest.predict_proba(X) for forest in estimator.estimators_]
+                predict_B = Parallel(n_jobs=-1)(
+                    delayed(self.tree_predict)(forest, z) for forest in estimator.estimators_)
+                # [forest.predict_proba(z) for forest in estimator.estimators_]
+                C = np.vstack((
+                    np.hstack((np.ones(len(estimator.estimators_)),
+                               np.zeros(len(estimator.estimators_) + len(self._classes)))),
+                    np.hstack((np.zeros(len(estimator.estimators_)),
+                               np.ones(len(estimator.estimators_)),
+                               np.zeros(len(self._classes)))),
+                    np.hstack((-1 * np.mean(predict_A, axis=1).transpose() / (len(estimator.estimators_) * len(X)),
+                               np.mean(predict_B, axis=1).transpose() / (len(z)),
+                               np.diag(-1 * np.ones(len(self._classes))))),
+                    np.hstack((np.diag(np.ones(2 * len(estimator.estimators_))),
+                               np.zeros((2 * len(estimator.estimators_), len(self._classes)))))
+                ))
+                G = np.diag(np.hstack((lamda + np.zeros(2 * len(estimator.estimators_)),
+                                       np.ones(len(self._classes)))))
+                a = np.zeros(2 * len(estimator.estimators_) + len(self._classes))
+                b = np.hstack(([1, 1], np.zeros(2 * len(estimator.estimators_) + len(self._classes))))
+                quad_prog = solve_qp(G, a, C.transpose(), b, meq=2 + len(self._classes))[0][:-len(self._classes)]
+                weight_X = quad_prog[:len(estimator.estimators_)]
+                weight_z = quad_prog[len(estimator.estimators_):]
+                predict_X.append(np.sum(predict_A * weight_X.reshape(len(weight_X), 1, 1), axis=0))
+                predict_z.append(np.sum(predict_B * weight_z.reshape(len(weight_z), 1, 1), axis=0))
+            X = np.hstack([X] + predict_X)
+            z = np.hstack([z] + predict_z)
+            untagget_y = np.array(predict_z).mean(axis=0).argmax(axis=1)
+            y[-len(untagget_y):] = untagget_y
             self._current_level += 1
             print('Обучение уровня ', self._current_level, ' cf закончилось X_shape = ', X.shape)
         print('Обучение cf закончилось')
-
-    def mgs_predict(self, X):
-        print('Тестирование mgs началось X_shape = ', X.shape)
-        if self._widows_size != 1:
-            X = self.windows_sliced(X)
-        new_X = np.hstack([mgs.predict_proba(X) for mgs in self._mgs_estimators])
-        print('Каскады протестированы X_shape = ', X.shape)
-        if self._widows_size != 1:
-            new_X = np.hstack([new_X[i:i + self._len_X] for i in range(0, len(new_X), self._len_X)])
-        print('Тестирование mgs закончено X_shape = ', new_X.shape)
-        return new_X
-
-    def cf_predict(self, X):
-        predict = None
-        for level in self._cascade_levels:
-            predict = []
-            for estimator in level:
-                predict.append(estimator.predict_proba(X))
-            X = np.hstack([X] + predict)
-        return np.array(predict).mean(axis=0).argmax(axis=1)
+        return untagget_y
 
     def windows_sliced(self, X: np.array):
         if self._widows_size * X.shape[1] < 1:
@@ -131,3 +140,7 @@ class DeepRandomForest(object):
 
     def get_mean_classes(self, X: np.array, y: np.array):
         return np.vstack([np.mean(X[np.argwhere(y == i)], axis=0) for i in self._classes])
+
+    @staticmethod
+    def tree_predict(tree, X):
+        return tree.predict_proba(X)

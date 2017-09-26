@@ -35,7 +35,7 @@ class ForestsModel(object):
     """
 
     _forest_job = -1
-    _model_multi_grained_level = True
+    _model_multi_grained_level = False
     _model_cascade_levels = None
 
     # MGS
