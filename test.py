@@ -4,4 +4,8 @@ import numpy as np
 import time
 
 if __name__ == '__main__':
-    Parallel(n_jobs=-1)(delayed(sqrt)(i**2) for i in range(10))
+    a = np.array([[1, 2, 3], [1, 1, 1], [9, 2, 1]])
+    print(a.max())
+    for _ in range(3):
+        tmp = a.max(axis=1).argmax()
+        a[tmp] = np.zeros(a[tmp].shape)

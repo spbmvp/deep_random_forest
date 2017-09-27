@@ -55,15 +55,15 @@ class DeepRandomForest(object):
         mean = self.get_mean_classes(X, y)
         for number in z:
             y_tar.append([np.linalg.norm(number - classes_mean) for classes_mean in mean])
-        y_tar = np.argmin(y_tar, axis=1)
-        y = np.hstack([y, y_tar])
-        X = np.vstack([X, z])
+        # y_tar = np.argmin(y_tar, axis=1)
+        # y = np.hstack([y, y_tar])
+        # X = np.vstack([X, z])
         if self._mgs_estimators is not None:
             X = self.mgs_fit(X, y)
         else:
             X = np.array([X_i.ravel() for X_i in X])
             z = np.array([z_i.ravel() for z_i in z])
-        return self.cf_stream(X, y, z)
+        return self.cf_stream(X, y, z, np.array(y_tar))
 
     def mgs_fit(self, X, y):
         print('Обучение mgs началось X_shape = ', X.shape)
@@ -77,21 +77,34 @@ class DeepRandomForest(object):
         print('Обучение mgs закончено X_shape = ', new_X.shape)
         return new_X
 
-    def cf_stream(self, X, y, z):
+    def cf_stream(self, X, y, z, y_z):
         lamda = 0.00000000001
+        percent_mix = 10
+        len_percent = int(len(z) * percent_mix / 100)
         untagget_y = None
+        y_index = []
+        for _ in range(len_percent):
+            tmp_y = y_z.min(axis=1).argmin()
+            y_index.append(tmp_y)
+            y_z[tmp_y] = np.ones(y_z[tmp_y].shape) + int(y_z.max())
+        y_z_train = y_z.argmin(axis=1)[y_index]
+        z_train = z[y_index]
+        z_test = np.delete(z, y_index, axis=0)
+        y = np.hstack([y, y_z_train])
+        X = np.vstack([X, z_train])
+
         print('Поток DADF стартовал X_shape = ', X.shape)
         while self._current_level != 4:
             predict_X = []
             predict_z = []
             for estimator in self._cf_estimators:
                 estimator.fit(X, y)
-                predict_A = Parallel(n_jobs=-1)(
-                    delayed(self.tree_predict)(forest, X) for forest in estimator.estimators_)
-                # [forest.predict_proba(X) for forest in estimator.estimators_]
-                predict_B = Parallel(n_jobs=-1)(
-                    delayed(self.tree_predict)(forest, z) for forest in estimator.estimators_)
-                # [forest.predict_proba(z) for forest in estimator.estimators_]
+                # predict_A = Parallel(n_jobs=-1)(
+                #     delayed(self.tree_predict)(forest, X) for forest in estimator.estimators_)
+                predict_A = [forest.predict_proba(X) for forest in estimator.estimators_]
+                # predict_B = Parallel(n_jobs=-1)(
+                #     delayed(self.tree_predict)(forest, z) for forest in estimator.estimators_)
+                predict_B = [forest.predict_proba(z_test) for forest in estimator.estimators_]
                 C = np.vstack((
                     np.hstack((np.ones(len(estimator.estimators_)),
                                np.zeros(len(estimator.estimators_) + len(self._classes)))),
@@ -113,8 +126,20 @@ class DeepRandomForest(object):
                 weight_z = quad_prog[len(estimator.estimators_):]
                 predict_X.append(np.sum(predict_A * weight_X.reshape(len(weight_X), 1, 1), axis=0))
                 predict_z.append(np.sum(predict_B * weight_z.reshape(len(weight_z), 1, 1), axis=0))
-            X = np.hstack([X] + predict_X)
-            z = np.hstack([z] + predict_z)
+            y_tar = np.array(predict_z).mean(axis=0)
+            y_index = []
+            for _ in range(len_percent):
+                tmp_y = y_tar.max(axis=1).argmax()
+                y_index.append(tmp_y)
+                y_tar[tmp_y] = np.zeros(y_tar[tmp_y].shape)
+            y_tar = y_tar.argmax(axis=1)[y_index]
+            z_tar = z_test[y_index]
+            z_test = np.vstack((np.delete(z_test, y_index, axis=0), z_train))
+            X = np.vstack((X[:-len_percent], z_tar))
+            y = np.hstack((y[:-len_percent], y_tar))
+            X = np.hstack([X] + list(np.hstack((predict_X[:, -len_percent], predict_z[:, y_index]))))
+            z = np.hstack([z] + list(np.vstack((np.delete(predict_z, y_index, axis=1), predict_X[:, -len_percent:]))))
+
             untagget_y = np.array(predict_z).mean(axis=0).argmax(axis=1)
             y[-len(untagget_y):] = untagget_y
             self._current_level += 1
