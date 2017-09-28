@@ -48,7 +48,7 @@ class DeepRandomForest(object):
                                for estimator in cf_model]
         self._n_estimator = [len(estimator.estimators_) for estimator in self._cf_estimators]
 
-    def stream(self, X, y, z):
+    def stream(self, X, y, z, y2):
         self._classes = np.unique(y)
         self._len_X = len(X)
         y_tar = []
@@ -63,7 +63,7 @@ class DeepRandomForest(object):
         else:
             X = np.array([X_i.ravel() for X_i in X])
             z = np.array([z_i.ravel() for z_i in z])
-        return self.cf_stream(X, y, z, np.array(y_tar))
+        return self.cf_stream(X, y, z, np.array(y_tar), y2)
 
     def mgs_fit(self, X, y):
         print('Обучение mgs началось X_shape = ', X.shape)
@@ -77,16 +77,18 @@ class DeepRandomForest(object):
         print('Обучение mgs закончено X_shape = ', new_X.shape)
         return new_X
 
-    def cf_stream(self, X, y, z, y_z):
+    def cf_stream(self, X, y, z, y_z, y2):
         lamda = 0.00000000001
         percent_mix = 10
         len_percent = int(len(z) * percent_mix / 100)
         untagget_y = None
+        predict_X = []
         y_index = []
+        y_z_temp = copy.deepcopy(y_z)
         for _ in range(len_percent):
-            tmp_y = y_z.min(axis=1).argmin()
+            tmp_y = y_z_temp.min(axis=1).argmin()
             y_index.append(tmp_y)
-            y_z[tmp_y] = np.ones(y_z[tmp_y].shape) + int(y_z.max())
+            y_z_temp[tmp_y] = np.ones(y_z_temp[tmp_y].shape) + int(np.max(y_z_temp))
         y_z_train = y_z.argmin(axis=1)[y_index]
         z_train = z[y_index]
         z_test = np.delete(z, y_index, axis=0)
@@ -94,7 +96,7 @@ class DeepRandomForest(object):
         X = np.vstack([X, z_train])
 
         print('Поток DADF стартовал X_shape = ', X.shape)
-        while self._current_level != 4:
+        while self._current_level != 10:
             predict_X = []
             predict_z = []
             for estimator in self._cf_estimators:
@@ -126,26 +128,32 @@ class DeepRandomForest(object):
                 weight_z = quad_prog[len(estimator.estimators_):]
                 predict_X.append(np.sum(predict_A * weight_X.reshape(len(weight_X), 1, 1), axis=0))
                 predict_z.append(np.sum(predict_B * weight_z.reshape(len(weight_z), 1, 1), axis=0))
-            y_tar = np.array(predict_z).mean(axis=0)
+
+            y_train = np.array(predict_z).mean(axis=0)
             y_index = []
             for _ in range(len_percent):
-                tmp_y = y_tar.max(axis=1).argmax()
+                tmp_y = y_train.max(axis=1).argmax()
                 y_index.append(tmp_y)
-                y_tar[tmp_y] = np.zeros(y_tar[tmp_y].shape)
-            y_tar = y_tar.argmax(axis=1)[y_index]
-            z_tar = z_test[y_index]
-            z_test = np.vstack((np.delete(z_test, y_index, axis=0), z_train))
-            X = np.vstack((X[:-len_percent], z_tar))
-            y = np.hstack((y[:-len_percent], y_tar))
-            X = np.hstack([X] + list(np.hstack((predict_X[:, -len_percent], predict_z[:, y_index]))))
-            z = np.hstack([z] + list(np.vstack((np.delete(predict_z, y_index, axis=1), predict_X[:, -len_percent:]))))
+                y_train[tmp_y] = np.zeros(y_train[tmp_y].shape)
+            y_train = np.array(predict_z).mean(axis=0).argmax(axis=1)[y_index]
+            z_train = z_test[y_index]
+            z_test = np.delete(z_test, y_index, axis=0)
 
+            new_predict_z = np.array(predict_X)[:, -len_percent:]
+            new_predict_X = np.array(predict_z)[:, y_index]
+
+            z_test = np.hstack([z_test] + list(np.delete(predict_z, y_index, axis=1)))
+            z_test = np.vstack((z_test, np.hstack([X[-len_percent:]] + list(new_predict_z))))
+
+            X = np.hstack([X[:-len_percent]] + list(np.array(predict_X)[:, :-len_percent]))
+            X = np.vstack((X, np.hstack([z_train] + list(new_predict_X))))
+            y2 = np.hstack((np.delete(y2, y_index), y2[y_index]))
             untagget_y = np.array(predict_z).mean(axis=0).argmax(axis=1)
-            y[-len(untagget_y):] = untagget_y
+            y[-len_percent:] = y_train
             self._current_level += 1
             print('Обучение уровня ', self._current_level, ' cf закончилось X_shape = ', X.shape)
         print('Обучение cf закончилось')
-        return untagget_y
+        return np.hstack((untagget_y, np.array(predict_X).mean(axis=0).argmax(axis=1)[-len_percent:])), y2
 
     def windows_sliced(self, X: np.array):
         if self._widows_size * X.shape[1] < 1:
