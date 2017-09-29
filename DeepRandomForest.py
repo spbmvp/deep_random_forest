@@ -48,7 +48,7 @@ class DeepRandomForest(object):
                                for estimator in cf_model]
         self._n_estimator = [len(estimator.estimators_) for estimator in self._cf_estimators]
 
-    def stream(self, X, y, z, y2):
+    def stream(self, X, y, z, y_z):
         self._classes = np.unique(y)
         self._len_X = len(X)
         y_tar = []
@@ -63,7 +63,7 @@ class DeepRandomForest(object):
         else:
             X = np.array([X_i.ravel() for X_i in X])
             z = np.array([z_i.ravel() for z_i in z])
-        return self.cf_stream(X, y, z, np.array(y_tar), y2)
+        return self.cf_stream(X, y, z, y_z, np.array(y_tar))
 
     def mgs_fit(self, X, y):
         print('Обучение mgs началось X_shape = ', X.shape)
@@ -77,28 +77,32 @@ class DeepRandomForest(object):
         print('Обучение mgs закончено X_shape = ', new_X.shape)
         return new_X
 
-    def cf_stream(self, X, y, z, y_z, y2):
-        lamda = 0.00000000001
-        percent_mix = 10
+    def cf_stream(self, X, y, z, y_z, y_pred):
+        lamda = 1
+        percent_mix = 20
         len_percent = int(len(z) * percent_mix / 100)
-        untagget_y = None
-        predict_X = []
+        # y_index = np.random.choice(len(z), len_percent, replace=False)
         y_index = []
-        y_z_temp = copy.deepcopy(y_z)
+        y_z_temp = copy.deepcopy(y_pred)
         for _ in range(len_percent):
             tmp_y = y_z_temp.min(axis=1).argmin()
             y_index.append(tmp_y)
             y_z_temp[tmp_y] = np.ones(y_z_temp[tmp_y].shape) + int(np.max(y_z_temp))
-        y_z_train = y_z.argmin(axis=1)[y_index]
-        z_train = z[y_index]
-        z_test = np.delete(z, y_index, axis=0)
-        y = np.hstack([y, y_z_train])
-        X = np.vstack([X, z_train])
-
+        y_pred = np.argmin(y_pred, axis=1)
         print('Поток DADF стартовал X_shape = ', X.shape)
-        while self._current_level != 10:
+        while self._current_level != 5:
             predict_X = []
             predict_z = []
+
+            # тренировочная дата
+            y_z_train = y_pred[y_index]
+            z_train = z[y_index]
+            # дата для тестирования
+            z_test = np.delete(z, y_index, axis=0)
+            # склеивание
+            y = np.hstack([y, y_z_train])
+            X = np.vstack([X, z_train])
+
             for estimator in self._cf_estimators:
                 estimator.fit(X, y)
                 # predict_A = Parallel(n_jobs=-1)(
@@ -129,31 +133,35 @@ class DeepRandomForest(object):
                 predict_X.append(np.sum(predict_A * weight_X.reshape(len(weight_X), 1, 1), axis=0))
                 predict_z.append(np.sum(predict_B * weight_z.reshape(len(weight_z), 1, 1), axis=0))
 
-            y_train = np.array(predict_z).mean(axis=0)
-            y_index = []
-            for _ in range(len_percent):
-                tmp_y = y_train.max(axis=1).argmax()
-                y_index.append(tmp_y)
-                y_train[tmp_y] = np.zeros(y_train[tmp_y].shape)
-            y_train = np.array(predict_z).mean(axis=0).argmax(axis=1)[y_index]
-            z_train = z_test[y_index]
-            z_test = np.delete(z_test, y_index, axis=0)
-
-            new_predict_z = np.array(predict_X)[:, -len_percent:]
-            new_predict_X = np.array(predict_z)[:, y_index]
-
-            z_test = np.hstack([z_test] + list(np.delete(predict_z, y_index, axis=1)))
-            z_test = np.vstack((z_test, np.hstack([X[-len_percent:]] + list(new_predict_z))))
+            y_z = np.hstack((np.delete(y_z, y_index), y_z[y_index]))
+            y_pred = np.hstack((np.array(predict_z).mean(axis=0).argmax(axis=1),
+                                np.array(predict_X).mean(axis=0).argmax(axis=1)[-len_percent:]))
 
             X = np.hstack([X[:-len_percent]] + list(np.array(predict_X)[:, :-len_percent]))
-            X = np.vstack((X, np.hstack([z_train] + list(new_predict_X))))
-            y2 = np.hstack((np.delete(y2, y_index), y2[y_index]))
-            untagget_y = np.array(predict_z).mean(axis=0).argmax(axis=1)
-            y[-len_percent:] = y_train
+            z = np.vstack((np.hstack([z_test] + predict_z),
+                           np.hstack([z_train] + list(np.array(predict_X)[:, -len_percent:]))))
+            y = y[:-len_percent]
+            # y_pred = []
+            # mean = self.get_mean_classes(X, y)
+            # for number in z:
+            #     y_pred.append([np.linalg.norm(number - classes_mean) for classes_mean in mean])
+            # y_pred = np.argmin(y_pred, axis=1)
+
+            y_tmp = np.vstack((np.array(predict_z).mean(axis=0),
+                               np.array(predict_X).mean(axis=0)[-len_percent:]))
+            y_index = []
+            for _ in range(len_percent):
+                tmp_y = y_tmp.max(axis=1).argmax()
+                y_index.append(tmp_y)
+                y_tmp[tmp_y] = np.zeros(y_tmp[tmp_y].shape)
+
+            # y_index = np.random.choice(len(z), len_percent, replace=False)
+
             self._current_level += 1
             print('Обучение уровня ', self._current_level, ' cf закончилось X_shape = ', X.shape)
+            self.acur(y_pred, y_z)
         print('Обучение cf закончилось')
-        return np.hstack((untagget_y, np.array(predict_X).mean(axis=0).argmax(axis=1)[-len_percent:])), y2
+        return y_pred, y_z
 
     def windows_sliced(self, X: np.array):
         if self._widows_size * X.shape[1] < 1:
@@ -174,6 +182,9 @@ class DeepRandomForest(object):
     def get_mean_classes(self, X: np.array, y: np.array):
         return np.vstack([np.mean(X[np.argwhere(y == i)], axis=0) for i in self._classes])
 
-    @staticmethod
-    def tree_predict(tree, X):
-        return tree.predict_proba(X)
+    def acur(self, x, y):
+        k = 0
+        for i in range(len(x)):
+            if x[i] == y[i]:
+                k += 1
+        print("acuracy = ", 100 * (k / len(x)))

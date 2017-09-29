@@ -1,4 +1,4 @@
-from random import randint
+from random import shuffle
 from numpy import array, zeros
 
 
@@ -45,27 +45,23 @@ class Mnist:
         self.classes.append(image)
 
     def getSetTemp(self, count=10):
-        data = 'no'
         X_set = []
         y_set = []
-        while data != 'ok':
-            X_set = self.classes
-            y_set = self.labels
-            test = array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-            for i in y_set:
-                test[i] += 1
-            if test.min() > 2:
-                data = 'ok'
+        a = list(range(len(self.classes)))
+        shuffle(a)
+        for i in a[:count]:
+            X_set.append(self.classes[i])
+            y_set.append(self.labels[i])
         return array(X_set), array(y_set)
 
-    def getSet(self):
-        X_28_28, y_set = self.getSetTemp()
+    def getSet(self, count=10):
+        X_28_28, y_set = self.getSetTemp(count)
         X_16_16 = array(zeros((len(y_set), 16, 16)))
         for k in range(len(X_28_28)):
             for i in range(1, 15, 1):
                 for j in range(1, 15, 1):
                     tmp = X_28_28[k, (i - 1) * 2:(i - 1) * 2 + 2, (j - 1) * 2:(j - 1) * 2 + 2]
                     if (tmp[0, 0] == 1 and tmp[0, 1] == 1) or (tmp[0, 0] == 1 and tmp[1, 0] == 1) or (
-                            tmp[0, 1] == 1 and tmp[1, 1] == 1) or (tmp[1, 0] == 1 and tmp[1, 1] == 1):
+                                    tmp[0, 1] == 1 and tmp[1, 1] == 1) or (tmp[1, 0] == 1 and tmp[1, 1] == 1):
                         X_16_16[k, i, j] = 1
         return X_16_16, y_set

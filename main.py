@@ -1,10 +1,10 @@
 from ForestsModel import ForestsModel
-from Seeds import Seeds
+from UspsLoad import Usps
 from MnistLoad import Mnist
 
+
 if __name__ == '__main__':
-    data = Mnist()
-    X, y = data.getSetTemp()
+    X, y = Usps().getSet(1000)
+    z, y_z = Mnist().getSet(100)
     cascade_forest = ForestsModel().get_forests()
-    k, y = cascade_forest.stream(X[:1000], y[:1000], X[1000:1500], y[1000:1500])
-    print(y[450:], k[450:])
+    k, y = cascade_forest.stream(X, y, z, y_z)
