@@ -53,8 +53,10 @@ class DeepRandomForest(object):
         self._len_X = len(X)
         y_tar = []
         mean = self.get_mean_classes(X, y)
+        # mean = np.where(mean > 0.2, mean, [0])
+        # print(mean[9].reshape(16, 16))
         for number in z:
-            y_tar.append([np.linalg.norm(number - classes_mean) for classes_mean in mean])
+            y_tar.append([np.linalg.norm(number - classes_mean) for classes_mean in X])
         # y_tar = np.argmin(y_tar, axis=1)
         # y = np.hstack([y, y_tar])
         # X = np.vstack([X, z])
@@ -78,19 +80,20 @@ class DeepRandomForest(object):
         return new_X
 
     def cf_stream(self, X, y, z, y_z, y_pred):
-        lamda = 1
-        percent_mix = 20
+        lamda = 10 ** -2
+        percent_mix = 5
         len_percent = int(len(z) * percent_mix / 100)
-        # y_index = np.random.choice(len(z), len_percent, replace=False)
-        y_index = []
-        y_z_temp = copy.deepcopy(y_pred)
-        for _ in range(len_percent):
-            tmp_y = y_z_temp.min(axis=1).argmin()
-            y_index.append(tmp_y)
-            y_z_temp[tmp_y] = np.ones(y_z_temp[tmp_y].shape) + int(np.max(y_z_temp))
-        y_pred = np.argmin(y_pred, axis=1)
+        y_index = np.random.choice(len(z), len_percent, replace=False)
+        # y_index = []
+        # y_z_temp = copy.deepcopy(y_pred)
+        # for _ in range(len_percent):
+        #     tmp_y = y_z_temp.min(axis=1).argmin()
+        #     y_index.append(tmp_y)
+        #     y_z_temp[tmp_y] = np.ones(y_z_temp[tmp_y].shape) + int(np.max(y_z_temp))
+        y_pred = y[np.argmin(y_pred, axis=1)]
         print('Поток DADF стартовал X_shape = ', X.shape)
-        while self._current_level != 5:
+        self.acur(y_pred, y_z)
+        while self._current_level != 20:
             predict_X = []
             predict_z = []
 
@@ -141,6 +144,13 @@ class DeepRandomForest(object):
             z = np.vstack((np.hstack([z_test] + predict_z),
                            np.hstack([z_train] + list(np.array(predict_X)[:, -len_percent:]))))
             y = y[:-len_percent]
+
+            # y_pred = []
+            # for number in z:
+            #     y_pred.append([np.linalg.norm(number - classes_mean) for classes_mean in X])
+            # y_pred = y[np.argmin(y_pred, axis=1)]
+
+
             # y_pred = []
             # mean = self.get_mean_classes(X, y)
             # for number in z:
@@ -151,7 +161,7 @@ class DeepRandomForest(object):
                                np.array(predict_X).mean(axis=0)[-len_percent:]))
             y_index = []
             for _ in range(len_percent):
-                tmp_y = y_tmp.max(axis=1).argmax()
+                tmp_y = y_tmp.max(axis=1).argmin()
                 y_index.append(tmp_y)
                 y_tmp[tmp_y] = np.zeros(y_tmp[tmp_y].shape)
 
@@ -159,6 +169,9 @@ class DeepRandomForest(object):
 
             self._current_level += 1
             print('Обучение уровня ', self._current_level, ' cf закончилось X_shape = ', X.shape)
+
+            # print(np.where(z[30, :256].reshape(16, 16) != 0, ['@'], [' ']))
+            # print(y_pred[30])
             self.acur(y_pred, y_z)
         print('Обучение cf закончилось')
         return y_pred, y_z
