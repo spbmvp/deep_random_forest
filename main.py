@@ -1,10 +1,11 @@
 from ForestsModel import ForestsModel
 from Seeds import Seeds
 from MnistLoad import Mnist
+from UspsLoad import Usps
 
 if __name__ == '__main__':
-    data = Mnist()
-    X, y = data.getSetTemp(1500)
+    data = Usps()
+    X, y = data.getSet(2500)
     cascade_forest = ForestsModel().get_forests()
     cascade_forest.fit(X[:1000], y[:1000])
     pred = cascade_forest.predict(X[1000:1500])

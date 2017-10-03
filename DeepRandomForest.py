@@ -88,8 +88,8 @@ class DeepRandomForest(object):
             for i in range(self._len_X):
                 I[i][y[i]] = 1
             predict = np.array(predict)
-            lamda = 10**-10
-            vi = 1
+            lamda = 10**-12
+            vi = 0.9
             tree_weight = np.ones(sum(self.n_estimator)) / sum(self.n_estimator)
             for i in range(len(self.n_estimator)):
                 summ = sum(self.n_estimator[:i])
