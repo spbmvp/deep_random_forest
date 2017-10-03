@@ -1,4 +1,4 @@
-from random import randint
+from random import shuffle
 from numpy import array, zeros
 
 
@@ -13,7 +13,7 @@ class Mnist:
         fileImage.read(16)
         fileLabel = open('./TrainData/train-labels.idx1-ubyte', 'rb')
         fileLabel.read(8)
-        for _ in range(50000):
+        for _ in range(3000):
             image = zeros((28, 28), dtype=float)
             for i in range(28):
                 for j in range(28):
@@ -45,17 +45,13 @@ class Mnist:
         self.classes.append(image)
 
     def getSetTemp(self, count=10):
-        data = 'no'
         X_set = []
         y_set = []
-        while data != 'ok':
-            X_set = self.classes
-            y_set = self.labels
-            test = array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-            for i in y_set:
-                test[i] += 1
-            if test.min() > 2:
-                data = 'ok'
+        a = list(range(len(self.classes)))
+        # shuffle(a)
+        for i in a[:count]:
+            X_set.append(self.classes[i])
+            y_set.append(self.labels[i])
         return array(X_set), array(y_set)
 
     def getSet(self):

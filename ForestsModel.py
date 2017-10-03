@@ -49,7 +49,7 @@ class ForestsModel(object):
                           RandomForestClassifier,
                           ExtraTreesClassifier,
                           RandomForestClassifier]
-    _cascade_n_estimator = 1000
+    _cascade_n_estimator = 200
     _cascade_max_features = [1, 1, 'sqrt', 'sqrt']
 
     def __init__(self, n_trees_mgs=30, n_trees_cf=1000):
