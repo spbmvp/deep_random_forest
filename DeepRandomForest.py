@@ -101,7 +101,7 @@ class DeepRandomForest(object):
                     grad = 2 * step_tree_weight * lamda + self.sum_pred(tmp_pred, sum_pred - I)
                     t0 = np.argmin(grad)
                     g = np.zeros(self.n_estimator[i]) + (1 - vi) / self.n_estimator[i]
-                    g[t0] = 1
+                    g[t0] += vi
                     y0 = 2 / (step + 2)
                     step_tree_weight += y0 * (g - step_tree_weight)
                 tree_weight[summ:summ + self.n_estimator[i]] = step_tree_weight
