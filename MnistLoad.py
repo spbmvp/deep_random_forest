@@ -44,7 +44,7 @@ class Mnist:
             self.labels.append(9)
         self.classes.append(image)
 
-    def getSetTemp(self, count=10):
+    def getSetTemp(self, count=50000):
         X_set = []
         y_set = []
         a = list(range(len(self.classes)))

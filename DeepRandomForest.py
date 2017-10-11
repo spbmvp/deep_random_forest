@@ -1,5 +1,7 @@
 import numpy as np
 import copy
+from sklearn.model_selection import cross_val_predict
+from sklearn.metrics import accuracy_score
 
 
 class DeepRandomForest(object):
@@ -34,8 +36,11 @@ class DeepRandomForest(object):
     n_estimator = 0
     classes = 0
     list_weight = []
+    max_score = 0
 
     def __init__(self, cf_model, mgs_model, **kwargs):
+        self._cascade_levels = []
+        self._current_level = 0
         # инициализация слоя mgs
         if mgs_model:
             self._mgs_estimators = [estimator['estimators_class'](**estimator['estimators_params'])
@@ -70,7 +75,14 @@ class DeepRandomForest(object):
             X = self.windows_sliced(X)
         y = np.hstack([y for _ in range(int(len(X) / len(y)))])
         [mgs.fit(X, y) for mgs in self._mgs_estimators]
-        new_X = np.hstack([mgs.predict_proba(X) for mgs in self._mgs_estimators])
+        new_X = np.hstack([cross_val_predict(
+            mgs,
+            X,
+            y,
+            cv=3,
+            method='predict_proba',
+            n_jobs=-1,
+        ) for mgs in self._mgs_estimators])
         if self._widows_size != 1:
             new_X = np.hstack([new_X[i:i + self._len_X] for i in range(0, len(new_X), self._len_X)])
         print('Обучение mgs закончено X_shape = ', new_X.shape)
@@ -78,35 +90,49 @@ class DeepRandomForest(object):
 
     def cf_fit(self, X, y=None):
         print('Обучение cf началось X_shape = ', X.shape)
-        while self._current_level != 1:
+        while True:
             predict = []
             for estimator in self._cf_estimators:
                 estimator.fit(X, y)
-                for forest in estimator.estimators_:
-                    predict.append(forest.predict_proba(X))
+                predict.append(self.cross_val(estimator, X, y))
+                # for forest in estimator.estimators_:
+                #     predict.append(forest.predict_proba(X))
+                pass
             I = np.zeros((self._len_X, len(self.classes)))
             for i in range(self._len_X):
                 I[i][y[i]] = 1
-            predict = np.array(predict)
-            lamda = 10**-12
-            vi = 0.9
+            predict = np.vstack(predict)
+            score = accuracy_score(y, predict.mean(axis=0).argmax(axis=1))
+            print(score)
+            if self.max_score < score:
+                self.max_score = score
+            else:
+                score = 0
+            lamda = 10 ** -4
+            vi = 1
             tree_weight = np.ones(sum(self.n_estimator)) / sum(self.n_estimator)
             for i in range(len(self.n_estimator)):
                 summ = sum(self.n_estimator[:i])
                 step_tree_weight = tree_weight[summ:summ + self.n_estimator[i]]
                 tmp_pred = predict[summ:summ + self.n_estimator[i]]
-                for step in range(100):
+                g = np.zeros(self.n_estimator[i]) + (1 - vi) / self.n_estimator[i]
+                for step in range(self.n_estimator[i] * 2):
                     sum_pred = step_tree_weight.reshape(len(step_tree_weight), 1, 1) * tmp_pred
                     sum_pred = sum(sum_pred)
-                    grad = 2 * step_tree_weight * lamda + self.sum_pred(tmp_pred, sum_pred - I)
+                    grad = 2 * step_tree_weight * lamda + np.sum(
+                        tmp_pred * np.array(sum_pred - I).reshape(1, I.shape[0], I.shape[1]), (1, 2))
                     t0 = np.argmin(grad)
-                    g = np.zeros(self.n_estimator[i]) + (1 - vi) / self.n_estimator[i]
                     g[t0] += vi
                     y0 = 2 / (step + 2)
                     step_tree_weight += y0 * (g - step_tree_weight)
+                    # print("Цикл")
                 tree_weight[summ:summ + self.n_estimator[i]] = step_tree_weight
                 print('Лес обучен')
+
             predict = self.pred_calc(predict, tree_weight)
+            print(accuracy_score(y, np.array(predict).mean(axis=0).argmax(axis=1)))
+            if score == 0:
+                break
             X = np.hstack([X] + predict)
             self._cascade_levels.append(copy.deepcopy(self._cf_estimators))
             self._current_level += 1
@@ -152,13 +178,6 @@ class DeepRandomForest(object):
                                for j in range(X.shape[2] - windows_size + 1)])
             return new_X.reshape(new_X.shape[0], new_X.shape[1] * new_X.shape[2])
 
-    def sum_pred(self, pred, classes):
-        for i in range(classes.shape[0]):
-            for j in range(classes.shape[1]):
-                pred[:, i, j] *= classes[i, j]
-        pred = np.sum(pred, (1, 2))
-        return pred
-
     def pred_calc(self, prediction, weight):
         tree_pred = []
         for i in range(len(self.n_estimator)):
@@ -171,3 +190,24 @@ class DeepRandomForest(object):
             classes_pred = np.array(classes_pred).transpose()
             tree_pred.append(classes_pred)
         return tree_pred
+
+    def cross_val(self, estimator, X, y):
+        est = copy.deepcopy(estimator)
+        predict = []
+        step = int(len(X) / 3)
+        group_1 = list(range(step))
+        group_2 = list(range(step, 2 * step))
+        group_3 = list(range(2 * step, len(X)))
+        split = [[list(np.hstack((group_2, group_3))), group_1],
+                 [list(np.hstack((group_1, group_3))), group_2],
+                 [list(np.hstack((group_2, group_1))), group_3]]
+        for train, test in split:
+            est.fit(X[train], y[train])
+            predict_group = []
+            for forest in est.estimators_:
+                predict_group.append(forest.predict_proba(X[test]))
+            predict.append(np.array(predict_group))
+        return np.vstack(
+            (predict[0].transpose(1, 0, 2),
+             predict[1].transpose(1, 0, 2),
+             predict[2].transpose(1, 0, 2))).transpose(1, 0, 2)

@@ -35,7 +35,7 @@ class ForestsModel(object):
     """
 
     _forest_job = -1
-    _model_multi_grained_level = True
+    _model_multi_grained_level = False
     _model_cascade_levels = None
 
     # MGS
@@ -43,7 +43,7 @@ class ForestsModel(object):
                       RandomForestClassifier]
     _mgs_min_samples_split = 2
     _mgs_n_estimator = 30
-    _mgs_windows_size = 0.93
+    _mgs_windows_size = 0.95
     # CF
     _cascade_list_tree = [ExtraTreesClassifier,
                           RandomForestClassifier,
