@@ -53,14 +53,14 @@ class DeepRandomForest(object):
                                for estimator in cf_model]
         self.n_estimator = [estimator.n_estimators for estimator in self._cf_estimators]
 
-    def fit(self, X, y=None):
+    def fit(self, X, y=None, lamda = 10 ** -4, vi = 1):
         self._len_X = len(X)
         self.classes = np.unique(y)
         if self._mgs_estimators is not None:
             X = self.mgs_fit(X, y)
         else:
             X = np.array([X_i.ravel() for X_i in X])
-        self.cf_fit(X, y)
+        self.cf_fit(X, y, lamda, vi)
 
     def predict(self, X):
         self._len_X = len(X)
@@ -89,7 +89,7 @@ class DeepRandomForest(object):
         log.debug('Обучение mgs закончено X_shape = %s', new_X.shape)
         return new_X
 
-    def cf_fit(self, X, y=None):
+    def cf_fit(self, X, y=None, lamda = 10 ** -4, vi = 1):
         log.debug('Обучение cf началось X_shape = %s', X.shape)
         while True:
             log.debug('Обучение уровня %d cf началось', self._current_level)
@@ -110,8 +110,6 @@ class DeepRandomForest(object):
                 self.max_score = score
             else:
                 score = 0
-            lamda = 10 ** -4
-            vi = 1
             tree_weight = np.ones(sum(self.n_estimator)) / sum(self.n_estimator)
             for i in range(len(self.n_estimator)):
                 summ = sum(self.n_estimator[:i])
