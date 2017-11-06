@@ -2,6 +2,7 @@ import numpy as np
 import copy
 from sklearn.model_selection import cross_val_predict
 from sklearn.metrics import accuracy_score
+import logging as log
 
 
 class DeepRandomForest(object):
@@ -70,7 +71,7 @@ class DeepRandomForest(object):
         return self.cf_predict(X)
 
     def mgs_fit(self, X, y=None):
-        print('Обучение mgs началось X_shape = ', X.shape)
+        log.debug('Обучение mgs началось X_shape = ' +  X.shape)
         if self._widows_size != 1:
             X = self.windows_sliced(X)
         y = np.hstack([y for _ in range(int(len(X) / len(y)))])
@@ -85,12 +86,13 @@ class DeepRandomForest(object):
         ) for mgs in self._mgs_estimators])
         if self._widows_size != 1:
             new_X = np.hstack([new_X[i:i + self._len_X] for i in range(0, len(new_X), self._len_X)])
-        print('Обучение mgs закончено X_shape = ', new_X.shape)
+        log.debug('Обучение mgs закончено X_shape = %s', new_X.shape)
         return new_X
 
     def cf_fit(self, X, y=None):
-        print('Обучение cf началось X_shape = ', X.shape)
+        log.debug('Обучение cf началось X_shape = %s', X.shape)
         while True:
+            log.debug('Обучение уровня %d cf началось', self._current_level)
             predict = []
             for estimator in self._cf_estimators:
                 estimator.fit(X, y)
@@ -103,7 +105,7 @@ class DeepRandomForest(object):
                 I[i][y[i]] = 1
             predict = np.vstack(predict)
             score = accuracy_score(y, predict.mean(axis=0).argmax(axis=1))
-            print(score)
+            log.debug("Score = %f", score)
             if self.max_score < score:
                 self.max_score = score
             else:
@@ -127,28 +129,28 @@ class DeepRandomForest(object):
                     step_tree_weight += y0 * (g - step_tree_weight)
                     # print("Цикл")
                 tree_weight[summ:summ + self.n_estimator[i]] = step_tree_weight
-                print('Лес обучен')
+                log.debug('Лес обучен')
 
             predict = self.pred_calc(predict, tree_weight)
-            print(accuracy_score(y, np.array(predict).mean(axis=0).argmax(axis=1)))
+            log.debug("Level %d: Accuracy = %f", self._current_level, accuracy_score(y, np.array(predict).mean(axis=0).argmax(axis=1)))
+            log.debug('Обучение уровня %d cf закончилось X_shape = %s', self._current_level, X.shape)
             if score == 0:
                 break
             X = np.hstack([X] + predict)
             self._cascade_levels.append(copy.deepcopy(self._cf_estimators))
             self._current_level += 1
             self.list_weight.append(tree_weight)
-            print('Обучение уровня ', self._current_level, ' cf закончилось X_shape = ', X.shape)
-        print('Обучение cf закончилось')
+        log.debug('Обучение cf закончилось')
 
     def mgs_predict(self, X):
-        print('Тестирование mgs началось X_shape = ', X.shape)
+        log.debug('Тестирование mgs началось X_shape = %s', X.shape)
         if self._widows_size != 1:
             X = self.windows_sliced(X)
         new_X = np.hstack([mgs.predict_proba(X) for mgs in self._mgs_estimators])
-        print('Каскады протестированы X_shape = ', X.shape)
+        log.debug('Каскады протестированы X_shape = %s', X.shape)
         if self._widows_size != 1:
             new_X = np.hstack([new_X[i:i + self._len_X] for i in range(0, len(new_X), self._len_X)])
-        print('Тестирование mgs закончено X_shape = ', new_X.shape)
+        log.debug('Тестирование mgs закончено X_shape = %s', new_X.shape)
         return new_X
 
     def cf_predict(self, X):
@@ -164,7 +166,7 @@ class DeepRandomForest(object):
 
     def windows_sliced(self, X: np.array):
         if self._widows_size * X.shape[1] < 1:
-            print("Окно слишком маленькое. Автоматически установлено равное 1 признаку")
+            log.debug("Окно слишком маленькое. Автоматически установлено равное 1 признаку")
             windows_size = 1
         else:
             windows_size = int(self._widows_size * X.shape[1])
