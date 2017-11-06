@@ -115,8 +115,8 @@ class DeepRandomForest(object):
                 summ = sum(self.n_estimator[:i])
                 step_tree_weight = tree_weight[summ:summ + self.n_estimator[i]]
                 tmp_pred = predict[summ:summ + self.n_estimator[i]]
-                g = np.zeros(self.n_estimator[i]) + (1 - vi) / self.n_estimator[i]
                 for step in range(self.n_estimator[i] * 2):
+                    g = np.zeros(self.n_estimator[i]) + (1 - vi) / self.n_estimator[i]
                     sum_pred = step_tree_weight.reshape(len(step_tree_weight), 1, 1) * tmp_pred
                     sum_pred = sum(sum_pred)
                     grad = 2 * step_tree_weight * lamda + np.sum(
