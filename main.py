@@ -46,9 +46,9 @@ if __name__ == '__main__':
     X_test, y_test = LoadData("TrainData/breast_test.txt").getSet()
     forestFit(X_train, y_train, X_test, y_test, "Breast")
 
-    # X_train, y_train = LoadData("TrainData/ionosphere_data_train.txt").getSet()
-    # X_test, y_test = LoadData("TrainData/ionosphere_data_test.txt").getSet()
-    # forestFit(X_train, y_train, X_test, y_test, "Ion")
+    X_train, y_train = LoadData("TrainData/ionosphere_data_train.txt").getSet()
+    X_test, y_test = LoadData("TrainData/ionosphere_data_test.txt").getSet()
+    forestFit(X_train, y_train, X_test, y_test, "Ion")
 
     X_train, y_train = LoadData("TrainData/seeds_train.txt").getSet()
     X_test, y_test = LoadData("TrainData/seeds_test.txt").getSet()
