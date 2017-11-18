@@ -93,6 +93,7 @@ class ForestsModel(object):
                               estimators_params=dict(
                                   n_estimators=self._get_class_param(self._cascade_n_estimator, i),
                                   max_features=self._get_class_param(self._cascade_max_features, i),
-                                  n_jobs=self._get_class_param(self._forest_job, i)
+                                  n_jobs=self._get_class_param(self._forest_job, i),
+                                  random_state=self._get_class_param(241, i)
                               )))
         return model

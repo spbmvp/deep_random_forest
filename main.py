@@ -16,14 +16,14 @@ def initLogging(logLevel):
 def forestFit(X_train, y_train, X_test, y_test, nameSet):
     log.info("#######Start %s set fitting#########", nameSet)
     log.info("     vi    MeanAcc  Med.Acc  Min acc  Max acc lambda")
-    Parallel(n_jobs=56)(delayed(in_parallel)(X_test, X_train, vi, y_test, y_train) for vi in frange(0, 1, 0.01))
+    Parallel(n_jobs=8)(delayed(in_parallel)(X_test, X_train, vi, y_test, y_train) for vi in frange(0, 1, 0.01))
     log.info("#########Finish %s set fitting##########", nameSet)
 
 
 def in_parallel(X_test, X_train, vi, y_test, y_train):
     for lamda in [10 ** pow_lamda for pow_lamda in range(-12, 3, 2)]:
         acc_array = []
-        for i in range(100):
+        for i in range(1):
             cascade_forest = ForestsModel(n_trees_cf=int(X_train.shape[0])).get_forests()
             cascade_forest.fit(X_train, y_train, vi=vi, lamda=lamda)
             pred = cascade_forest.predict(X_test)
@@ -37,7 +37,8 @@ def in_parallel(X_test, X_train, vi, y_test, y_train):
         mean = np.mean(acc_array)
         # log.info("\n\tvi = %f\n\tMean accuracy = %f\n\tMedian accuracy = %f\n\tMin accuracy = %f\n\tMax accuracy = %f",vi, mean, med,
         #          np.min(acc_array), np.max(acc_array))
-        log.info(" %f %f %f %f %f %s", vi, mean, med, np.min(acc_array), np.max(acc_array), lamda)
+        # log.info(" %f %f %f %f %f %s", vi, mean, med, np.min(acc_array), np.max(acc_array), lamda)
+        log.info(" %f %f %s", vi, mean, lamda)
 
 
 if __name__ == '__main__':
