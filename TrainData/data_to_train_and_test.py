@@ -15,7 +15,7 @@ for line in file1.readlines():
     line_array = array(line.split(), dtype=str)
     data.append(line_array)
     labels.append(int(line_array[0]))
-
+file1.close()
 shuffle(data)
 l_count = Counter(labels)
 indexes = {}
@@ -32,6 +32,7 @@ for clas in l_count.keys():
         for j in range(0, len(data[i])):
             file.write(data[i][j] + " ")
         file.write("\n")
+file.close()
 
 file = open(file_name_test, 'w')
 for clas in l_count.keys():
@@ -39,3 +40,4 @@ for clas in l_count.keys():
         for j in range(0, len(data[i])):
             file.write(data[i][j] + " ")
         file.write("\n")
+file.close()

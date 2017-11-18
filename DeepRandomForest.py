@@ -1,5 +1,7 @@
 import numpy as np
 import copy
+
+from datetime import date
 from sklearn.model_selection import cross_val_predict
 from sklearn.metrics import accuracy_score
 import logging as log
@@ -91,12 +93,14 @@ class DeepRandomForest(object):
 
     def cf_fit(self, X, y=None, lamda = 10 ** -4, vi = 1):
         log.debug('Обучение cf началось X_shape = %s', X.shape)
+        self.list_weight = []
+        X_old = X_new = X
         while True:
             log.debug('Обучение уровня %d cf началось', self._current_level)
             predict = []
             for estimator in self._cf_estimators:
-                estimator.fit(X, y)
-                predict.append(self.cross_val(estimator, X, y))
+                estimator.fit(X_new, y)
+                predict.append(self.cross_val(estimator, X_new, y))
                 # for forest in estimator.estimators_:
                 #     predict.append(forest.predict_proba(X))
                 pass
@@ -108,14 +112,17 @@ class DeepRandomForest(object):
             log.debug("Score = %f", score)
             if self.max_score < score:
                 self.max_score = score
+                X_old=X_new
             else:
-                score = 0
+                log.debug('Обучение уровня %d cf закончилось X_shape = %s дал худший результат чем предыдущая итерация', self._current_level, X_new.shape)
+                break
             tree_weight = np.ones(sum(self.n_estimator)) / sum(self.n_estimator)
             for i in range(len(self.n_estimator)):
                 summ = sum(self.n_estimator[:i])
                 step_tree_weight = tree_weight[summ:summ + self.n_estimator[i]]
                 tmp_pred = predict[summ:summ + self.n_estimator[i]]
-                for step in range(self.n_estimator[i] * 2):
+                # for step in range(self.n_estimator[i] * 2):
+                for step in range(1000):
                     g = np.zeros(self.n_estimator[i]) + (1 - vi) / self.n_estimator[i]
                     sum_pred = step_tree_weight.reshape(len(step_tree_weight), 1, 1) * tmp_pred
                     sum_pred = sum(sum_pred)
@@ -125,20 +132,24 @@ class DeepRandomForest(object):
                     g[t0] += vi
                     y0 = 2 / (step + 2)
                     step_tree_weight += y0 * (g - step_tree_weight)
-                    # print("Цикл")
                 tree_weight[summ:summ + self.n_estimator[i]] = step_tree_weight
-                log.debug('Лес обучен')
+                log.debug('Веса деревьев получены')
 
             predict = self.pred_calc(predict, tree_weight)
             log.debug("Level %d: Accuracy = %f", self._current_level, accuracy_score(y, np.array(predict).mean(axis=0).argmax(axis=1)))
-            log.debug('Обучение уровня %d cf закончилось X_shape = %s', self._current_level, X.shape)
-            if score == 0:
-                break
-            X = np.hstack([X] + predict)
+            log.debug('Обучение уровня %d cf закончилось X_shape = %s', self._current_level, X_old.shape)
+            X_new = np.hstack([X_old] + predict)
             self._cascade_levels.append(copy.deepcopy(self._cf_estimators))
             self._current_level += 1
             self.list_weight.append(tree_weight)
+            log.debug('Размер tree_weight = %d, shape X_new = %s', len(tree_weight), X_new.shape)
         log.debug('Обучение cf закончилось')
+        log.debug('Запишем веса в файл с именем weight %s _ %s, размер листа %d' % (vi, lamda, len(self.list_weight)))
+        if log.getLogger().level == log.DEBUG:
+            f = open("weight_tree/weight" + str(vi) + "_" + str(lamda) + ".txt", 'w')
+            for weight in self.list_weight:
+                f.write(str(list(weight)).replace(",", "\n"))
+            f.close()
 
     def mgs_predict(self, X):
         log.debug('Тестирование mgs началось X_shape = %s', X.shape)

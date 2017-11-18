@@ -51,12 +51,15 @@ class ForestsModel(object):
                           RandomForestClassifier]
     _cascade_n_estimator = 100
     _cascade_max_features = [1, 1, 'sqrt', 'sqrt']
+    _random_magic_num = 0
 
-    def __init__(self, n_trees_mgs=30, n_trees_cf=1000):
+    def __init__(self, n_trees_mgs=30, n_trees_cf=1000, random_magic_num=0):
         if n_trees_cf != 1000:
             self._cascade_n_estimator = n_trees_cf
         if n_trees_mgs != 30:
             self._mgs_n_estimator = n_trees_mgs
+        if random_magic_num != 0:
+            self._random_magic_num = random_magic_num
         if self._model_multi_grained_level:
             self._model_multi_grained_level = self._generate_mgs_model()
         self._model_cascade_levels = self._generate_cf_model()
@@ -94,6 +97,6 @@ class ForestsModel(object):
                                   n_estimators=self._get_class_param(self._cascade_n_estimator, i),
                                   max_features=self._get_class_param(self._cascade_max_features, i),
                                   n_jobs=self._get_class_param(self._forest_job, i),
-                                  random_state=self._get_class_param(241, i)
+                                  random_state=self._get_class_param(self._random_magic_num, i)
                               )))
         return model
