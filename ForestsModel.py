@@ -51,9 +51,10 @@ class ForestsModel(object):
                           RandomForestClassifier]
     _cascade_n_estimator = 100
     _cascade_max_features = [1, 1, 'sqrt', 'sqrt']
-    _random_magic_num = 0
+    _random_magic_num = 241
+    _eps=0.0001
 
-    def __init__(self, n_trees_mgs=30, n_trees_cf=1000, random_magic_num=0):
+    def __init__(self, n_trees_mgs=30, n_trees_cf=1000, random_magic_num=0, eps = 0.0001):
         if n_trees_cf != 1000:
             self._cascade_n_estimator = n_trees_cf
         if n_trees_mgs != 30:
@@ -63,12 +64,14 @@ class ForestsModel(object):
         if self._model_multi_grained_level:
             self._model_multi_grained_level = self._generate_mgs_model()
         self._model_cascade_levels = self._generate_cf_model()
+        self._eps = eps
 
     # Возвращает объект класса deep_random_forest в соответствии с заданной моделью
     def get_forests(self):
         deep_random_forest = DeepRandomForest(mgs_model=self._model_multi_grained_level,
                                               cf_model=self._model_cascade_levels,
-                                              windows_size=self._mgs_windows_size)
+                                              windows_size=self._mgs_windows_size,
+                                              eps=self._eps)
         return deep_random_forest
 
     @staticmethod
