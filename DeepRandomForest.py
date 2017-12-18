@@ -94,7 +94,6 @@ class DeepRandomForest(object):
 
     def cf_fit(self, X, y=None, lamda=10 ** -4, vi=1):
         log.log(9, 'Обучение cf началось')
-        self.list_weight = []
         X_old = X_new = X
         while True:
             log.log(9, 'Обучение уровня %d cf началось. X_shape = %s', self._current_level, X_new.shape)
@@ -102,62 +101,54 @@ class DeepRandomForest(object):
             for estimator in self._cf_estimators:
                 estimator.fit(X_new, y)
                 predict.append(self.cross_val(estimator, X_new, y))
-                # for forest in estimator.estimators_:
-                #     predict.append(forest.predict_proba(X))
                 pass
             I = np.zeros((self._len_X, len(self.classes)))
             for i in range(self._len_X):
                 I[i][y[i]] = 1
-            predict = np.vstack(predict)
-            score = accuracy_score(y, predict.mean(axis=0).argmax(axis=1))
-            log.debug("Уровнь %d, Score gcF = %f", self._current_level, score)
-            tree_weight = np.ones(sum(self.n_estimator)) / sum(self.n_estimator)
+            trees_weight = np.zeros((len(self.n_estimator), self.n_estimator[0]))
             for i in range(len(self.n_estimator)):
-                 self.calculate_weight_tree(I, i, lamda, predict, vi, tree_weight)
-            log.log(9, 'Веса деревьев получены')
-
-            predict = self.pred_calc(predict, tree_weight)
-            score = accuracy_score(y, np.array(predict).mean(axis=0).argmax(axis=1))
-            log.debug("Уровнь %d, Score IDF = %f", self._current_level, score)
+                trees_weight[i] = (self.calculate_weight_tree(I, lamda, predict[i], vi, i))
+                log.log(9, 'Веса деревьев леса № %d получены', i)
+                log.debug('Веса деревьев леса № %d: %s', i, trees_weight[i])
+                v = self.v_calc(predict[i], trees_weight[i])
+                X_old = np.hstack((X_old, v))
+            score = np.ones(len(self._cf_estimators))
+            for i in range(len(self._cf_estimators)):
+                score[i] = (accuracy_score(y, predict[i].mean(axis=0).argmax(axis=1)))
+                log.log(9, 'Score IDF леса № %d = %s', i, score[i])
+            score = score.mean()
+            log.debug("Уровнь %d, Score IDF = %s", self._current_level, score)
             if self.max_score <= score and score - self.max_score >= self._eps:
                 self.max_score = score
-                X_old = X_new
             else:
-                log.log(9, 'Обучение уровня %d IDF закончилось X_shape = %s дал худший результат чем предыдущая итерация',
-                    self._current_level, X_new.shape)
+                log.log(9,
+                        'Обучение уровня %d IDF закончилось X_shape = %s дал худший результат чем предыдущая итерация',
+                        self._current_level, X_new.shape)
                 break
             log.log(9, 'Обучение уровня %d cf закончилось X_shape = %s', self._current_level, X_old.shape)
-            X_new = np.hstack([X_old] + predict)
+            X_new = X_old
             self._cascade_levels.append(copy.deepcopy(self._cf_estimators))
+            self.list_weight.append(trees_weight)
             self._current_level += 1
-            self.list_weight.append(tree_weight)
-            log.log(9, 'Размер tree_weight = %d, shape X_new = %s', len(tree_weight), X_new.shape)
         log.log(9, 'Обучение cf закончилось')
-        log.log(9, 'Запишем веса в файл с именем weight %s _ %s, размер листа %d' % (vi, lamda, len(self.list_weight)))
-        if log.getLogger().level <= log.DEBUG:
-            f = open("weight_tree/weight" + str(vi) + "_" + str(lamda) + ".txt", 'w')
-            for weight in self.list_weight:
-                f.write(str(list(weight)).replace(",", "\n").replace("]", "]\n"))
-            f.close()
 
-    def calculate_weight_tree(self, I, i, lamda, predict, vi, tree_weight):
-        summ = sum(self.n_estimator[:i])
-        n_estimator_i_ = self.n_estimator[i]
-        step_tree_weight = tree_weight[summ:summ + n_estimator_i_]
-        tmp_pred = predict[summ:summ + n_estimator_i_]
-        # for step in range(self.n_estimator[i] * 2):
-        if vi != 0.0:
-            for step in range(500):
-                g = np.zeros(n_estimator_i_) + (1 - vi) / n_estimator_i_
-                sum_pred = step_tree_weight.reshape(len(step_tree_weight), 1, 1) * tmp_pred
-                sum_pred = sum(sum_pred)
-                grad = 2 * step_tree_weight * lamda + np.sum(
-                    tmp_pred * np.array(sum_pred - I).reshape(1, I.shape[0], I.shape[1]), (1, 2))
-                t0 = np.argmin(grad)
-                g[t0] += vi
-                y0 = 2 / (step + 2)
-                step_tree_weight += y0 * (g - step_tree_weight)
-        tree_weight[summ:summ + n_estimator_i_] = step_tree_weight
+    def calculate_weight_tree(self, I, lamda, predict, vi, i):
+        L = np.zeros((self.n_estimator[i], self.n_estimator[i]))
+        P = np.zeros((self.n_estimator[i], self.n_estimator[i]))
+        b = np.ones(self.n_estimator[i])
+        for k in range(self.n_estimator[i]):
+            b[k] = sum(sum(predict[:][:][k] * I))
+            for j in range(self.n_estimator[i]):
+                P[k][j] = sum(sum(np.dot(predict[:][:][k], predict[:][:][j].transpose())))
+        np.fill_diagonal(L, lamda)
+        a = L + P
+
+        log.log(9, 'Матрица L = \n %s', L)
+        log.log(9, 'Матрица P = \n %s', P)
+        log.log(9, 'Матрица B = \n %s', b)
+        tree_weight = np.linalg.solve(a, b)
+        tree_weight = (1.0 - vi) * np.ones(self.n_estimator[i]) / self.n_estimator[i] + vi * tree_weight
+        return tree_weight / sum(tree_weight)
 
     def mgs_predict(self, X):
         log.log(9, 'Тестирование mgs началось X_shape = %s', X.shape)
@@ -171,15 +162,23 @@ class DeepRandomForest(object):
         return new_X
 
     def cf_predict(self, X):
-        predict = 0
+        X_new = X_old = X
         for i in range(len(self._cascade_levels)):
-            prediction = []
+            predict = []
             for j in range(len(self._cascade_levels[i])):
+                predict_forest = np.zeros((len(self._cascade_levels[i][j].estimators_), len(X), len(self.classes)))
+                k = 0
                 for forest in self._cascade_levels[i][j].estimators_:
-                    prediction.append(forest.predict_proba(X))
-            predict = self.pred_calc(np.array(prediction), self.list_weight[i])
-            X = np.hstack([X] + predict)
-        return np.array(predict).mean(axis=0).argmax(axis=1)
+                    predict_forest[k] = forest.predict_proba(X_new)
+                    k += 1
+                v = self.v_calc(predict_forest, self.list_weight[i][j])
+                X_old = np.hstack((X_old, v))
+                predict.append(predict_forest)
+            X_new = X_old
+        res = np.ones((len(self._cf_estimators), len(X)))
+        for i in range(len(self._cf_estimators)):
+            res[i] = predict[i].mean(axis=0).argmax(axis=1)
+        return res
 
     def windows_sliced(self, X: np.array):
         if self._widows_size * X.shape[1] < 1:
@@ -197,18 +196,14 @@ class DeepRandomForest(object):
                                for j in range(X.shape[2] - windows_size + 1)])
             return new_X.reshape(new_X.shape[0], new_X.shape[1] * new_X.shape[2])
 
-    def pred_calc(self, prediction, weight):
-        tree_pred = []
-        for i in range(len(self.n_estimator)):
-            summ = sum(self.n_estimator[:i])
-            classes_pred = []
-            for j in range(self.classes.size):
-                classes_pred.append(
-                    np.dot(weight[summ:summ + self.n_estimator[i]],
-                           prediction[summ:summ + self.n_estimator[i], :, j]))
-            classes_pred = np.array(classes_pred).transpose()
-            tree_pred.append(classes_pred)
-        return tree_pred
+    def v_calc(self, prediction, weight):
+        classes_pred = []
+        for j in range(self.classes.size):
+            classes_pred.append(
+                np.dot(weight,
+                       prediction[:, :, j]))
+        classes_pred = np.array(classes_pred).transpose()
+        return classes_pred
 
     def cross_val(self, estimator, X, y):
         est = copy.deepcopy(estimator)
@@ -226,7 +221,7 @@ class DeepRandomForest(object):
             for forest in est.estimators_:
                 predict_group.append(forest.predict_proba(X[test]))
             predict.append(np.array(predict_group))
-        p0=predict[0].transpose(1, 0, 2)
-        p1=predict[1].transpose(1, 0, 2)
-        p2=predict[2].transpose(1, 0, 2)
+        p0 = predict[0].transpose(1, 0, 2)
+        p1 = predict[1].transpose(1, 0, 2)
+        p2 = predict[2].transpose(1, 0, 2)
         return np.vstack((p0, p1, p2)).transpose(1, 0, 2)

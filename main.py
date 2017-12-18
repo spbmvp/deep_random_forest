@@ -3,6 +3,7 @@ import logging as log
 import numpy as np
 from joblib import Parallel, delayed
 from matplotlib.mlab import frange
+from sklearn.metrics import accuracy_score
 
 from ForestsModel import ForestsModel
 from LoadSet import LoadSet
@@ -15,32 +16,34 @@ def initLogging(logLevel):
 
 
 def forestFit(file_name, nameSet):
-    log.info("#######Start %s set fitting#########", nameSet)
-    log.info("  vi     MeanAcc        Med.Acc        Min acc        Max acc   lambda")
-    for lamda in [10 ** pow_lamda for pow_lamda in range(-12, 5, 30)]:
-        Parallel(n_jobs=-1)(delayed(in_parallel)(file_name, vi, lamda) for vi in frange(0, 1.0, 0.1))
-    log.info("#########Finish %s set fitting##########", nameSet)
+    log.info("%s", nameSet)
+    log.info("vi\tmean\tmedian\tmin\tmax\tlambda")
+    for vi in frange(0.0, 1.0, 0.1):
+        Parallel(n_jobs=-1)(delayed(in_parallel)(file_name, vi, lamda) for lamda in
+                            [10 ** pow_lamda for pow_lamda in range(-4, 4, 1)])
+    log.info("")
 
 
 def in_parallel(file_name, vi, lamda):
     acc_array = []
-    for i in range(100):
+    for i in range(1):
         X_train, y_train, X_test, y_test = LoadSet(file_name).getSet()
-        cascade_forest = ForestsModel(n_trees_cf=int(np.sqrt(X_train.shape[0])), random_magic_num = 241 + 3*i).get_forests()
+        cascade_forest = ForestsModel(n_trees_cf=int(np.sqrt(X_train.shape[0])),
+                                      random_magic_num=241 + 3 * i).get_forests()
         try:
             cascade_forest.fit(X_train, y_train, vi=vi, lamda=lamda)
             pred = cascade_forest.predict(X_test)
-            k = 0
+            acc = np.zeros(len(pred))
             for j in range(len(pred)):
-                if pred[j] == y_test[j]:
-                    k += 1
-            log.debug("Step %d: Accuracy = %f", i, float(k / len(pred)))
-            acc_array.append(float(k / len(pred)))
+                acc[j] = accuracy_score(y_test, pred[j])
+                log.log(9,"Step %d forest # %d: Accuracy = %f", i, j, acc[j])
+            log.debug("Step %d: Accuracy = %f", i, acc.mean())
+            acc_array.append(acc.mean())
         except:
             log.error("что-то пошло не так на этом этапе")
     med = np.median(acc_array)
     mean = np.mean(acc_array)
-    log.info(" %s %s %s %s %s %s", vi, mean, med, np.min(acc_array), np.max(acc_array), lamda)
+    log.info("%s\t%s\t%s\t%s\t%s\t%s", vi, mean, med, np.min(acc_array), np.max(acc_array), lamda)
 
 
 if __name__ == '__main__':
