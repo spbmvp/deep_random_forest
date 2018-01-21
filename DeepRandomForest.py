@@ -1,9 +1,11 @@
 import copy
-import logging as log
+import logging
 
 import numpy as np
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import cross_val_predict
+
+log = logging.getLogger('root')
 
 
 class DeepRandomForest(object):
@@ -101,9 +103,12 @@ class DeepRandomForest(object):
             predict = []
             for estimator in self._cf_estimators:
                 estimator.fit(X_new, y)
-                predict.append(self.cross_val(estimator, X_new, y))
-                # for forest in estimator.estimators_:
-                #     predict.append(forest.predict_proba(X))
+                # predict.append(self.cross_val(estimator, X_new, y))
+                proba = estimator.estimators_[0].predict_proba(X_new[:5])
+                predict_forest = []
+                for forest in estimator.estimators_:
+                    predict_forest.append(forest.predict_proba(X_new))
+                predict.append(predict_forest)
                 pass
             I = np.zeros((self._len_X, len(self.classes)))
             for i in range(self._len_X):
@@ -111,11 +116,12 @@ class DeepRandomForest(object):
             predict = np.vstack(predict)
             score = accuracy_score(y, predict.mean(axis=0).argmax(axis=1))
             log.debug("Уровнь %d, Score gcF = %f", self._current_level, score)
-            tree_weight = np.ones(sum(self.n_estimator)) / sum(self.n_estimator)
+            tree_equals_weight = np.ones(sum(self.n_estimator)) / self.n_estimator[0]
+            tree_weight = np.ones(sum(self.n_estimator)) / self.n_estimator[0]
             for i in range(len(self.n_estimator)):
                  self.calculate_weight_tree(I, i, lamda, predict, vi, tree_weight)
             log.log(9, 'Веса деревьев получены')
-
+            pred_cf = self.pred_calc(predict, tree_equals_weight)
             predict = self.pred_calc(predict, tree_weight)
             score = accuracy_score(y, np.array(predict).mean(axis=0).argmax(axis=1))
             log.debug("Уровнь %d, Score IDF = %f", self._current_level, score)
@@ -133,12 +139,6 @@ class DeepRandomForest(object):
             self.list_weight.append(tree_weight)
             log.log(9, 'Размер tree_weight = %d, shape X_new = %s', len(tree_weight), X_new.shape)
         log.log(9, 'Обучение cf закончилось')
-        log.log(9, 'Запишем веса в файл с именем weight %s _ %s, размер листа %d' % (vi, lamda, len(self.list_weight)))
-        if log.getLogger().level <= log.DEBUG:
-            f = open("weight_tree/weight" + str(vi) + "_" + str(lamda) + ".txt", 'w')
-            for weight in self.list_weight:
-                f.write(str(list(weight)).replace(",", "\n").replace("]", "]\n"))
-            f.close()
 
     def calculate_weight_tree(self, I, i, lamda, predict, vi, tree_weight):
         summ = sum(self.n_estimator[:i])
@@ -147,7 +147,7 @@ class DeepRandomForest(object):
         tmp_pred = predict[summ:summ + n_estimator_i_]
         # for step in range(self.n_estimator[i] * 2):
         if vi != 0.0:
-            for step in range(500):
+            for step in range(1000):
                 g = np.zeros(n_estimator_i_) + (1 - vi) / n_estimator_i_
                 sum_pred = step_tree_weight.reshape(len(step_tree_weight), 1, 1) * tmp_pred
                 sum_pred = sum(sum_pred)

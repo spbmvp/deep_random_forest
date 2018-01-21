@@ -48,19 +48,23 @@ class ForestsModel(object):
     _cascade_list_tree = [ExtraTreesClassifier,
                           RandomForestClassifier,
                           ExtraTreesClassifier,
-                          RandomForestClassifier]
+                          RandomForestClassifier
+                          ]
     _cascade_n_estimator = 100
     _cascade_max_features = [1, 1, 'sqrt', 'sqrt']
     _random_magic_num = 241
     _eps=0.0001
+    _max_depth=5
 
-    def __init__(self, n_trees_mgs=30, n_trees_cf=1000, random_magic_num=0, eps = 0.0001):
+    def __init__(self, n_trees_mgs=30, n_trees_cf=1000, random_magic_num=0, eps = 0.0001, max_depth = 5):
         if n_trees_cf != 1000:
             self._cascade_n_estimator = n_trees_cf
         if n_trees_mgs != 30:
             self._mgs_n_estimator = n_trees_mgs
         if random_magic_num != 0:
             self._random_magic_num = random_magic_num
+        if max_depth != 5:
+            self._max_depth = max_depth
         if self._model_multi_grained_level:
             self._model_multi_grained_level = self._generate_mgs_model()
         self._model_cascade_levels = self._generate_cf_model()
@@ -100,6 +104,7 @@ class ForestsModel(object):
                                   n_estimators=self._get_class_param(self._cascade_n_estimator, i),
                                   max_features=self._get_class_param(self._cascade_max_features, i),
                                   n_jobs=self._get_class_param(self._forest_job, i),
-                                  random_state=self._get_class_param(self._random_magic_num, i)
+                                  random_state=self._get_class_param(self._random_magic_num, i),
+                                  max_depth=self._get_class_param(self._max_depth, i)
                               )))
         return model
