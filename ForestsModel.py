@@ -51,14 +51,14 @@ class ForestsModel(object):
                           RandomForestClassifier
                           ]
     _cascade_n_estimator = 100
+    _cascade_n_group = 10
     _cascade_max_features = [1, 1, 'sqrt', 'sqrt']
     _random_magic_num = 241
     _eps=0.0001
     _max_depth=5
 
-    def __init__(self, n_trees_mgs=30, n_trees_cf=1000, random_magic_num=0, eps = 0.0001, max_depth = 5):
-        if n_trees_cf != 1000:
-            self._cascade_n_estimator = n_trees_cf
+    def __init__(self, n_trees_mgs=30, n_trees_cf=100, random_magic_num=0, eps = 0.0001, max_depth = 5):
+        self._cascade_n_estimator = n_trees_cf
         if n_trees_mgs != 30:
             self._mgs_n_estimator = n_trees_mgs
         if random_magic_num != 0:
@@ -99,12 +99,16 @@ class ForestsModel(object):
     def _generate_cf_model(self):
         model = []
         for i in range(len(self._cascade_list_tree)):
-            model.append(dict(estimators_class=self._cascade_list_tree[i],
-                              estimators_params=dict(
-                                  n_estimators=self._get_class_param(self._cascade_n_estimator, i),
-                                  max_features=self._get_class_param(self._cascade_max_features, i),
-                                  n_jobs=self._get_class_param(self._forest_job, i),
-                                  random_state=self._get_class_param(self._random_magic_num, i),
-                                  max_depth=self._get_class_param(self._max_depth, i)
-                              )))
+            model.append([])
+            for j in range(self._cascade_n_group):
+                model[i].append(
+                    dict(
+                        estimators_class=self._cascade_list_tree[i],
+                        estimators_params=dict(
+                            n_estimators=self._get_class_param(self._cascade_n_estimator, i),
+                            max_features=self._get_class_param(self._cascade_max_features, i),
+                            n_jobs=self._get_class_param(self._forest_job, i),
+                            random_state=self._get_class_param(self._random_magic_num, i)+i*self._cascade_n_group + j,
+                            max_depth=self._get_class_param(self._max_depth, i)
+                    )))
         return model

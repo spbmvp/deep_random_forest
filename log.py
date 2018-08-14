@@ -19,7 +19,8 @@ def setup_custom_logger(name, log_level):
     log_file = "log/testing.log"
     log_file_max_size = 1024 * 1024 * 20 # megabytes
     log_num_backups = 3
-    log_format = "%(asctime)s [%(levelname)s]: %(filename)s(%(funcName)s:%(lineno)s) >> %(message)s"
+    # log_format = "%(asctime)s [%(levelname)s]: %(filename)s(%(funcName)s:%(lineno)s) >> %(message)s"
+    log_format = "%(asctime)s [%(levelname)s]: >> %(message)s"
     log_date_format = "%m/%d/%Y %I:%M:%S %p"
     log_filemode = "w" # w: overwrite; a: append
 
