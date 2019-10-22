@@ -9,9 +9,9 @@ class Mnist:
         self.loadFile()
 
     def loadFile(self):
-        fileImage = open('./TrainData/train-images.idx3-ubyte', 'rb')
+        fileImage = open("./TrainData/train-images.idx3-ubyte", "rb")
         fileImage.read(16)
-        fileLabel = open('./TrainData/train-labels.idx1-ubyte', 'rb')
+        fileLabel = open("./TrainData/train-labels.idx1-ubyte", "rb")
         fileLabel.read(8)
         for _ in range(2000):
             image = zeros((28, 28), dtype=float)
@@ -60,8 +60,14 @@ class Mnist:
         for k in range(len(X_28_28)):
             for i in range(1, 15, 1):
                 for j in range(1, 15, 1):
-                    tmp = X_28_28[k, (i - 1) * 2:(i - 1) * 2 + 2, (j - 1) * 2:(j - 1) * 2 + 2]
-                    if (tmp[0, 0] == 1 and tmp[0, 1] == 1) or (tmp[0, 0] == 1 and tmp[1, 0] == 1) or (
-                                    tmp[0, 1] == 1 and tmp[1, 1] == 1) or (tmp[1, 0] == 1 and tmp[1, 1] == 1):
+                    tmp = X_28_28[
+                        k, (i - 1) * 2 : (i - 1) * 2 + 2, (j - 1) * 2 : (j - 1) * 2 + 2
+                    ]
+                    if (
+                        (tmp[0, 0] == 1 and tmp[0, 1] == 1)
+                        or (tmp[0, 0] == 1 and tmp[1, 0] == 1)
+                        or (tmp[0, 1] == 1 and tmp[1, 1] == 1)
+                        or (tmp[1, 0] == 1 and tmp[1, 1] == 1)
+                    ):
                         X_16_16[k, i, j] = 1
         return X_16_16, y_set

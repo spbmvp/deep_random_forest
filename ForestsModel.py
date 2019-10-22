@@ -39,18 +39,19 @@ class ForestsModel(object):
     _model_cascade_levels = None
 
     # MGS
-    _mgs_list_tree = [ExtraTreesClassifier,
-                      RandomForestClassifier]
+    _mgs_list_tree = [ExtraTreesClassifier, RandomForestClassifier]
     _mgs_min_samples_split = 2
     _mgs_n_estimator = 30
     _mgs_windows_size = 0.93
     # CF
-    _cascade_list_tree = [ExtraTreesClassifier,
-                          RandomForestClassifier,
-                          ExtraTreesClassifier,
-                          RandomForestClassifier]
+    _cascade_list_tree = [
+        ExtraTreesClassifier,
+        RandomForestClassifier,
+        ExtraTreesClassifier,
+        RandomForestClassifier,
+    ]
     _cascade_n_estimator = 100
-    _cascade_max_features = [1, 1, 'sqrt', 'sqrt']
+    _cascade_max_features = [1, 1, "sqrt", "sqrt"]
 
     def __init__(self, n_trees_mgs=30, n_trees_cf=1000):
         if n_trees_cf != 1000:
@@ -63,9 +64,11 @@ class ForestsModel(object):
 
     # Возвращает объект класса deep_random_forest в соответствии с заданной моделью
     def get_forests(self):
-        deep_random_forest = DeepRandomForest(mgs_model=self._model_multi_grained_level,
-                                              cf_model=self._model_cascade_levels,
-                                              windows_size=self._mgs_windows_size)
+        deep_random_forest = DeepRandomForest(
+            mgs_model=self._model_multi_grained_level,
+            cf_model=self._model_cascade_levels,
+            windows_size=self._mgs_windows_size,
+        )
         return deep_random_forest
 
     @staticmethod
@@ -78,21 +81,35 @@ class ForestsModel(object):
     def _generate_mgs_model(self):
         model = []
         for i in range(len(self._mgs_list_tree)):
-            model.append(dict(estimators_class=self._mgs_list_tree[i],
-                              estimators_params=dict(
-                                  n_estimators=self._get_class_param(self._mgs_n_estimator, i),
-                                  min_samples_split=self._get_class_param(self._mgs_min_samples_split, i),
-                                  n_jobs=self._get_class_param(self._forest_job, i)
-                              )))
+            model.append(
+                dict(
+                    estimators_class=self._mgs_list_tree[i],
+                    estimators_params=dict(
+                        n_estimators=self._get_class_param(self._mgs_n_estimator, i),
+                        min_samples_split=self._get_class_param(
+                            self._mgs_min_samples_split, i
+                        ),
+                        n_jobs=self._get_class_param(self._forest_job, i),
+                    ),
+                )
+            )
         return model
 
     def _generate_cf_model(self):
         model = []
         for i in range(len(self._cascade_list_tree)):
-            model.append(dict(estimators_class=self._cascade_list_tree[i],
-                              estimators_params=dict(
-                                  n_estimators=self._get_class_param(self._cascade_n_estimator, i),
-                                  max_features=self._get_class_param(self._cascade_max_features, i),
-                                  n_jobs=self._get_class_param(self._forest_job, i)
-                              )))
+            model.append(
+                dict(
+                    estimators_class=self._cascade_list_tree[i],
+                    estimators_params=dict(
+                        n_estimators=self._get_class_param(
+                            self._cascade_n_estimator, i
+                        ),
+                        max_features=self._get_class_param(
+                            self._cascade_max_features, i
+                        ),
+                        n_jobs=self._get_class_param(self._forest_job, i),
+                    ),
+                )
+            )
         return model
