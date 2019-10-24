@@ -2,7 +2,7 @@ from ForestsModel import ForestsModel
 from UspsLoad import Usps
 from MnistLoad import Mnist
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     X, y = Mnist().getSet(1100)
     # z, y_z = Usps().getSet(100)
     z, y_z = X[-100:], y[-100:]
